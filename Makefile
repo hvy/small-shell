@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS=-pedantic -Wall -ANSI -O4
+CFLAGS=-pedantic -Wall -ansi -O4
 SRCDIR=src/
 TARGET = shell
 

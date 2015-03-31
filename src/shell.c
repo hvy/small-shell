@@ -12,7 +12,7 @@
 
 int main(int argc, char *argv[], char *envp[]) {
 
-  //execve("/bin/ls", argv, envp);
+  /*execve("/bin/ls", argv, envp);*/
 
   size_t maxInputChars = MAX_INPUT_CHARS;
   char* input = (char*) malloc(sizeof(char) * MAX_INPUT_CHARS);
