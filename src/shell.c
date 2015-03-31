@@ -10,7 +10,7 @@
 #define SIGNALDETECTION       0
 
 #define MAX_INPUT_CHARS       100
-#define MAX_DIRECTORY_CHARS   200
+#define MAX_DIRECTORY_CHARS   300
 #define MAX_CMD_ARGS          10
 
 int parse(char *input, char *cmdArgv[], int *foreground);
@@ -44,7 +44,7 @@ int main(int argc, char *argv[], char *envp[]) {
     if (strcmp(cmdArgv[0], "cd") == 0) {
       chdir(cmdArgv[1]); 
     } else {
-      command(cmdArgv, foreground);
+      /*command(cmdArgv, foreground);*/
     } 
   } 
 
@@ -53,8 +53,8 @@ int main(int argc, char *argv[], char *envp[]) {
 
 /* Splits input and adds each word in cmdArgv.
     the function returns the number of words in cmdArgv */
-int parse(char* input, char *cmdArgv[], int *foreground) {
-  
+int parse(char *const input, char *cmdArgv[], int *foreground) {
+
   char *token;
   int cmdArgc = 0;
 
