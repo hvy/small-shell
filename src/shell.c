@@ -24,19 +24,15 @@ void sigchldHandler(int sig);
 
 int parse(char *input, char *cmdArgv[], int *foreground);
 int command(char *cmdArgv[], int foreground);
+void printCwd();
+void readCmd(char *cmd);
+void handleCmd(char *cmd);
 void handleCd(const int cmdArgc, char *cmdArgv[]);
 void handleCheckEnv(const int cmdArgc, char *cmdArgv[]);
 
 int main(int argc, char *argv[], char *envp[]) {
   
-  size_t maxInputChars = MAX_INPUT_CHARS;
-  int foreground;
-  int cmdArgc;
-  char *cmdArgv[MAX_CMD_ARGS];
   char *input = (char*) malloc(sizeof(char) * MAX_INPUT_CHARS);
-  
-  /* Will store the current working directory */
-  char cwd[MAX_DIRECTORY_CHARS];
   
   /* Register signal handlers
   // TODO: handle different kill commands
@@ -52,53 +48,75 @@ int main(int argc, char *argv[], char *envp[]) {
 
   /* Main loop of the Shell */
   while(1) {
-    getcwd(cwd, MAX_DIRECTORY_CHARS);
-    printf("%s@%s>", getlogin(), cwd);
-    /* printf("%d>", getpid()); */
-    getline(&input, &maxInputChars, stdin);    
-
-    /* Handle empty command */
-    if(1 == strlen(input)) continue;
-
-    /* Handle exit command */
-    if(strcmp(input, "exit\n") == 0) {
-      exit(0);    
-    }
-    
-    /* Handle all other commands by first parsing the input string */
-    cmdArgc = parse(input, cmdArgv, &foreground);
-
-    if(0 == strcmp(cmdArgv[0], "cd")) {
-      handleCd(cmdArgc, cmdArgv);
-    } else if(0 == strcmp(cmdArgv[0], "checkEnv")) {
-      handleCheckEnv(cmdArgc, cmdArgv);
-    } else {
-      command(cmdArgv, foreground);
-    } 
+    printCwd();
+    readCmd(input);
+    handleCmd(input);
   } 
 
 	return 0;
 }
 
-/* Handle the cd command using chdir(). cmdArgv[0] is "cd", cmdArgv[1] is 
-  the dir. Note that the last element in cmdArgv is always NULL. */
-void handleCd(const int cmdArgc, char *cmdArgv[]) {
-  
-  int res;
+void printCwd() {
+  char *cwd;
+  char cwdBuff[MAX_DIRECTORY_CHARS]; 
 
-  if(2 == cmdArgc /* handle root dir with 0 args to cd */) {
-    chdir("/");
-  } else if(0 == strcmp(cmdArgv[1], "~") /* home dir */) {
-    chdir(getenv("HOME"));
-  } else /* other dirs */ {
-    res = chdir(cmdArgv[1]);
-    if (0 != res /* failed to change dir */) {
-      /* change to home dir if chdir() fails */
-      chdir(getenv("HOME"));
-    }
-  }
+  cwd = getcwd(cwdBuff, MAX_DIRECTORY_CHARS);
+  
+  if(NULL == cwd) 
+    fatal("Failed to get the current working directory using getcwd()");
+  printf("%s@%s>", getlogin(), cwd);
+  /* printf("%d>", getpid()); */
 }
 
+void readCmd(char *cmd) {
+  int bytesRead;
+  size_t maxInputChars;
+  
+  maxInputChars = MAX_INPUT_CHARS;
+  bytesRead = getline(&cmd, &maxInputChars, stdin);
+  
+  if(-1 == bytesRead)
+    fatal("Failed to read from stdin using getline()"); 
+}
+
+void handleCmd(char *cmd) {
+  int cmdArgc, foreground;
+  char *cmdArgv[MAX_CMD_ARGS];
+  
+  /* Handle empty command */
+  if(1 == strlen(cmd)) return;
+
+  /* TODO Handle exit properly. Make sure no zombie processes are left. */
+  /* Handle exit command */
+  if(strcmp(cmd, "exit\n") == 0) exit(0);    
+  
+  /* Handle all other commands by first parsing the input string */
+  cmdArgc = parse(cmd, cmdArgv, &foreground);
+
+  if(0 == strcmp(cmdArgv[0], "cd"))
+    handleCd(cmdArgc, cmdArgv);
+  else if(0 == strcmp(cmdArgv[0], "checkEnv"))
+    handleCheckEnv(cmdArgc, cmdArgv);
+  else 
+    command(cmdArgv, foreground); 
+}
+
+/* Handle the cd command using chdir(). cmdArgv[0] is "cd", cmdArgv[1] is 
+  the dir. Note that the last element in cmdArgv is always NULL. */
+void handleCd(const int cmdArgc, char *cmdArgv[]) { 
+  int e;
+
+  if(2 == cmdArgc /* handle root dir with 0 args to cd */) {
+    e = chdir("/");
+  } else if(0 == strcmp(cmdArgv[1], "~") /* home dir */) {
+    e = chdir(getenv("HOME"));
+  } else /* other dirs */ {
+    e = chdir(cmdArgv[1]);
+  }
+
+  if (0 != e /* failed to change dir,  change to home dir if chdir() fails */)
+    chdir(getenv("HOME"));
+}
 
 /* Executes "printenv | sort | pager" if no arguments are given to the command.
    If arguments are passed to the command then 
