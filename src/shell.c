@@ -2,6 +2,7 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <signal.h>
+#include <bits/sigaction.h> /* needed to use sigaction */
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -19,8 +20,35 @@ void fatal(char *msg) {
   exit(EXIT_FAILURE);
 }
 
-void sigintHandler(int sig);
-void sigchldHandler(int sig);
+void sigintHandler(int sigNum) {
+  /*
+   * TODO: send to foreground child
+   */
+  exit(0);
+}
+
+void sigchldHandler(int sig) {
+  while (waitpid((pid_t) (-1), 0, WNOHANG) > 0);
+}
+
+void registerSignalHandlers() {
+  struct sigaction saChild;
+  
+  /*
+  if (signal(SIGINT, sigintHandler) == SIG_ERR) 
+    fatal("Could not create signal handler for SIGINT");
+  */
+  /*
+  if (signal(SIGCHLD, sigchldHandler) == SIG_ERR)
+    fatal("Could not create signal handler for SIGCHLD");
+  */
+
+  saChild.sa_handler = &sigchldHandler;
+  sigemptyset(&saChild.sa_mask);
+  /*saChild.sa_flags = SA_RESTART | SA_NOCLDSTOP;*/
+  if (sigaction(SIGCHLD, &saChild, 0) == -1)
+    fatal("Could not create signal handler for SIGCHLD");
+}
 
 int parse(char *input, char *cmdArgv[], int *foreground);
 int command(char *cmdArgv[], int foreground);
@@ -34,17 +62,10 @@ int main(int argc, char *argv[], char *envp[]) {
   
   char *input = (char*) malloc(sizeof(char) * MAX_INPUT_CHARS);
   
-  /* Register signal handlers
-  // TODO: handle different kill commands
-  // SIGTERM should allow the process to clean up
-  // SIGKILL cannot be caught and should just close the process directly
-  // signal() is not recommended, use sigaction instead
-  */
-  if (signal(SIGINT, sigintHandler) == SIG_ERR) 
-    fatal("Could not create signal handler for SIGINT");
-
-  if (signal(SIGCHLD, sigchldHandler) == SIG_ERR)
-    fatal("Could not create signal handler for SIGCHLD");
+  /* Will store the current working directory */
+  char cwd[MAX_DIRECTORY_CHARS];
+  
+  registerSignalHandlers();
 
   /* Main loop of the Shell */
   while(1) {
@@ -196,16 +217,3 @@ int command(char **cmdArgv, int foreground) {
   return 0;
 }
 
-void sigintHandler(int sigNum) {
-  /*TODO*/
-  printf("sigint caught %d\n", sigNum);
-
-  /*TODO
-   * if not exiting, need to reinstall as signal handler again*/
-
-  exit(0);
-}
-
-void sigchldHandler(int sig) {
-  while (waitpid((pid_t) (-1), 0, WNOHANG) > 0);
-}
