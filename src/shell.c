@@ -21,6 +21,13 @@
 #define PIPE_READ_SIDE        ( 0 )
 #define PIPE_WRITE_SIDE       ( 1 )
 
+/* Linked list for processes */
+struct processNode {
+  pid_t pid;
+  struct processNode *next;
+};
+struct processNode *headProcess = NULL;
+
 void fatal(char *msg) {
   printf("%s\nExiting\n", msg);
   exit(EXIT_FAILURE);
@@ -38,8 +45,14 @@ void sigchldHandler(int sig) {
 }
 
 void registerSignalHandlers() {
+  struct sigaction sa;
   struct sigaction saChild;
   
+  sa.sa_handler = &sigintHandler;
+  sigemptyset(&sa.sa_mask);
+  if (sigaction(SIGINT, &sa, 0) == -1)
+    fatal("Could not create signal handlers for SIGINT");
+
   saChild.sa_handler = &sigchldHandler;
   sigemptyset(&saChild.sa_mask);
   /*saChild.sa_flags = SA_RESTART | SA_NOCLDSTOP;*/
@@ -105,8 +118,17 @@ void handleCmd(char *cmd) {
 
   /* TODO Handle exit properly. Make sure no zombie processes are left. */
   /* Handle exit command */
-  if(strcmp(cmd, "exit\n") == 0) exit(0);    
-  
+  if(strcmp(cmd, "exit\n") == 0) {
+    while (headProcess) {
+      struct processNode *p = headProcess;
+      headProcess = p->next;
+      kill(p->pid, SIGKILL); /* TODO: maybe SIGTERM is better here? */
+      free(p);
+    }
+
+    exit(0);    
+  }
+
   /* Handle all other commands by first parsing the input string */
   cmdArgc = parse(cmd, cmdArgv, &foreground);
 
@@ -289,7 +311,10 @@ int command(char **cmdArgv, int foreground) {
     /* Process is a parent process */
     if (foreground) waitpid(pid, NULL, 0);
     else {
-      /*TODO*/
+      struct processNode *newProcess = malloc(sizeof(struct processNode));
+      newProcess -> pid = pid; 
+      newProcess -> next = headProcess;
+      headProcess = newProcess;
     }
   }
 
