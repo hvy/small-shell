@@ -24,6 +24,7 @@ void sigintHandler(int sigNum);
 int parse(char *input, char *cmdArgv[], int *foreground);
 int command(char *cmdArgv[], int foreground);
 void handleCd(const int cmdArgc, char *cmdArgv[]);
+void handleCheckEnv(const int cmdArgc, char *cmdArgv[]);
 
 int main(int argc, char *argv[], char *envp[]) {
   
@@ -52,6 +53,9 @@ int main(int argc, char *argv[], char *envp[]) {
     /* printf("%d>", getpid()); */
     getline(&input, &maxInputChars, stdin);    
 
+    /* Handle empty command */
+    if(1 == strlen(input)) continue;
+
     /* Handle exit command */
     if(strcmp(input, "exit\n") == 0) {
       exit(0);    
@@ -60,8 +64,10 @@ int main(int argc, char *argv[], char *envp[]) {
     /* Handle all other commands by first parsing the input string */
     cmdArgc = parse(input, cmdArgv, &foreground);
 
-    if (strcmp(cmdArgv[0], "cd") == 0) {
+    if(0 == strcmp(cmdArgv[0], "cd")) {
       handleCd(cmdArgc, cmdArgv);
+    } else if(0 == strcmp(cmdArgv[0], "checkEnv")) {
+      handleCheckEnv(cmdArgc, cmdArgv);
     } else {
       command(cmdArgv, foreground);
     } 
@@ -86,6 +92,22 @@ void handleCd(const int cmdArgc, char *cmdArgv[]) {
       /* change to home dir if chdir() fails */
       chdir(getenv("HOME"));
     }
+  }
+}
+
+
+/* Executes "printenv | sort | pager" if no arguments are given to the command.
+   If arguments are passed to the command then 
+   "printenv | grep <arguments> | sort | pager" is be executed. The pager 
+   executed is selected primarily based on the value of the users "PAGER" 
+   environment variable. If no such variable is set then it tries to execute 
+   "less" and if that fails "more". */
+void handleCheckEnv(const int cmdArgc, char *cmdArgv[]) {
+  
+  if(2 == cmdArgc /* no args to checkEnv */) {
+  
+  } else {
+  
   }
 }
 
