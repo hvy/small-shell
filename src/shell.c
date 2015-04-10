@@ -12,11 +12,14 @@
 #endif
 
 /* Background proess termination detection using signal handlers(1), or polling(0) */
-#define SIGNALDETECTION       0
+#define SIGNALDETECTION       ( 0 )
 
-#define MAX_INPUT_CHARS       100
-#define MAX_DIRECTORY_CHARS   300
-#define MAX_CMD_ARGS          10
+#define MAX_INPUT_CHARS       ( 100 )
+#define MAX_DIRECTORY_CHARS   ( 300 )
+#define MAX_CMD_ARGS          ( 10 )
+
+#define PIPE_READ_SIDE        ( 0 )
+#define PIPE_WRITE_SIDE       ( 1 )
 
 void fatal(char *msg) {
   printf("%s\nExiting\n", msg);
@@ -67,7 +70,7 @@ int main(int argc, char *argv[], char *envp[]) {
 
   free(input);
 
-	return 0;
+  return 0;
 }
 
 void printCwd() {
@@ -139,12 +142,95 @@ void handleCd(const int cmdArgc, char *cmdArgv[]) {
    environment variable. If no such variable is set then it tries to execute 
    "less" and if that fails "more". */
 void handleCheckEnv(const int cmdArgc, char *cmdArgv[]) {
+  int e, status, childStatus;
+  int pipefd[2];
+  char *pager;
+  char *emptyArgv[2];
+  pid_t childPid;
+   
+  /* Pager is set to NULL if PAGER isn't found. 
+     If so, try less, else use pager */
+  pager = getenv("PAGER");
   
-  if(2 == cmdArgc /* no args to checkEnv */) {
+  /* pipe */
+  e = pipe(pipefd);
+  if(-1 == e) fatal("Failed in checkEnv when calling pipe()");
   
-  } else {
-  
+  /* fork  */
+  childPid = fork();
+  if(0 == childPid /* printenv */) {
+    e = dup2(pipefd[PIPE_WRITE_SIDE], STDOUT_FILENO);
+    if(-1 == e) fatal("Failed in printenv when calling dup2()");
+    e = close(pipefd[PIPE_READ_SIDE]);
+    if(-1 == e) fatal("Failed in printenv when calling close()");
+    e = close(pipefd[PIPE_WRITE_SIDE]);
+    if(-1 == e) fatal("Failed in printenv when calling close()");
+    
+    emptyArgv[0] = "printenv";
+    emptyArgv[1] = (char *) NULL;
+    execvp(emptyArgv[0], emptyArgv);
+    
+    /* Reaching this line means that printenv failed */
+    fatal("Failed to execute printenv"); 
+    /* End of printenv */     
   }
+
+  if(-1 == childPid) fatal("Failed to fork by calling fork()");
+
+  childPid = fork();
+  if(0 == childPid /* sort or grep */) {
+    e = dup2(pipefd[PIPE_READ_SIDE], STDIN_FILENO);  
+    if(-1 == e) fatal("Failed in sort/grep when calling dup2()");
+    e = close(pipefd[PIPE_WRITE_SIDE]);
+    if(-1 == e) fatal("Failed in sort/grep when calling close()");
+    e = close(pipefd[PIPE_READ_SIDE]);
+    if(-1 == e) fatal("Failed in sort/grep when calling close()");
+
+    if(2 == cmdArgc /* no args to checkEnv */) {
+      emptyArgv[0] = "sort";
+      emptyArgv[1] = (char *) NULL;
+      execvp(emptyArgv[0], emptyArgv);
+    } else {
+      cmdArgv[0] = "grep";
+      /* TODO Handle this in a nicer manner */
+      execvp(cmdArgv[0], cmdArgv);
+    }
+    
+    /* Reaching this line means that printenv failed */
+    fatal("Failed to execute sort/grep"); 
+    /* End of printenv */    
+  }   
+
+  if(-1 == childPid) fatal("Failed to fork by calling fork()");
+ 
+  /* Code from here is only run by the parent process */
+  e = close(pipefd[PIPE_READ_SIDE]);
+  if(-1 == e) fatal("Failed in sort/grep when calling close()");
+  e = close(pipefd[PIPE_WRITE_SIDE]);
+  if(-1 == e) fatal("Failed in sort/grep when calling close()");
+
+  childPid = wait(&status); /* wait for the first child process */
+  if(-1 == childPid) fatal("Failed at first wait()");
+
+  if(WIFEXITED(status)) {
+    childStatus = WEXITSTATUS(status);
+    if(0 != childStatus) fatal("Failed at first child process");
+  } else {
+    if(WIFSIGNALED(status)) fatal("Failed by a signal from the child process");
+    
+    childPid = wait(&status); /* wait for the second child process */ 
+    if(-1 == childPid) fatal("Failed at second wait()");
+    
+    if(WIFEXITED(status)) {
+      childStatus = WEXITSTATUS(status);
+      if(0 != childStatus) fatal("Failed at second child process");
+    } else {
+      if(WIFSIGNALED(status)) fatal("Failed by a signal from the child process");
+    }
+  }
+
+  /* TODO only return and do not exit */
+  exit(0);
 }
 
 /* Splits input and adds each word in cmdArgv.
