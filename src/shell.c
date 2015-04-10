@@ -24,6 +24,7 @@ void sigchldHandler(int sig);
 
 int parse(char *input, char *cmdArgv[], int *foreground);
 int command(char *cmdArgv[], int foreground);
+void handleCd(const int cmdArgc, char *cmdArgv[]);
 
 int main(int argc, char *argv[], char *envp[]) {
   
@@ -51,8 +52,8 @@ int main(int argc, char *argv[], char *envp[]) {
   /* Main loop of the Shell */
   while(1) {
     getcwd(cwd, MAX_DIRECTORY_CHARS);
-    /*printf("%s@%s>", getlogin(), cwd);*/
-    printf("%d>", getpid());
+    printf("%s@%s>", getlogin(), cwd);
+    /* printf("%d>", getpid()); */
     getline(&input, &maxInputChars, stdin);    
 
     /* Handle exit command */
@@ -64,13 +65,32 @@ int main(int argc, char *argv[], char *envp[]) {
     cmdArgc = parse(input, cmdArgv, &foreground);
 
     if (strcmp(cmdArgv[0], "cd") == 0) {
-      chdir(cmdArgv[1]); 
+      handleCd(cmdArgc, cmdArgv);
     } else {
       command(cmdArgv, foreground);
     } 
   } 
 
 	return 0;
+}
+
+/* Handle the cd command using chdir(). cmdArgv[0] is "cd", cmdArgv[1] is 
+  the dir. Note that the last element in cmdArgv is always NULL. */
+void handleCd(const int cmdArgc, char *cmdArgv[]) {
+  
+  int res;
+
+  if(2 == cmdArgc /* handle root dir with 0 args to cd */) {
+    chdir("/");
+  } else if(0 == strcmp(cmdArgv[1], "~") /* home dir */) {
+    chdir(getenv("HOME"));
+  } else /* other dirs */ {
+    res = chdir(cmdArgv[1]);
+    if (0 != res /* failed to change dir */) {
+      /* change to home dir if chdir() fails */
+      chdir(getenv("HOME"));
+    }
+  }
 }
 
 /* Splits input and adds each word in cmdArgv.
