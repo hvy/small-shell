@@ -1,5 +1,6 @@
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <errno.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -104,14 +105,14 @@ int parse(char *const input, char *cmdArgv[], int *foreground) {
 
 int command(char **cmdArgv, int foreground) {
   pid_t pid;
-  printf("%s\n", (*cmdArgv)[0]);
-  /*printf("%s\n", "command received");*/
   pid = fork();
 
   if (pid < 0) fatal("Failed to fork parent process");
   else if (0 == pid ) {
     /* Process is a child process */
-    
+    int e = execvp(cmdArgv[0], cmdArgv + 4);
+    printf("%d\n", e);
+    printf("%d\n", errno);
     exit(EXIT_SUCCESS);
   } else {
     /* Process is a parent process */
