@@ -24,7 +24,6 @@ void sigintHandler(int sigNum);
 int parse(char *input, char *cmdArgv[], int *foreground);
 int command(char *cmdArgv[], int foreground);
 
-
 int main(int argc, char *argv[], char *envp[]) {
   
   size_t maxInputChars = MAX_INPUT_CHARS;
@@ -100,6 +99,9 @@ int parse(char *const input, char *cmdArgv[], int *foreground) {
     token = strtok(NULL,  " ");
   }
 
+  cmdArgv[cmdArgc] = NULL;
+  ++cmdArgc;
+
   return cmdArgc;
 }
 
@@ -110,7 +112,7 @@ int command(char **cmdArgv, int foreground) {
   if (pid < 0) fatal("Failed to fork parent process");
   else if (0 == pid ) {
     /* Process is a child process */
-    int e = execvp(cmdArgv[0], cmdArgv + 4);
+    int e = execvp(cmdArgv[0], cmdArgv);
     printf("%d\n", e);
     printf("%d\n", errno);
     exit(EXIT_SUCCESS);
