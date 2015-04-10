@@ -74,6 +74,8 @@ int main(int argc, char *argv[], char *envp[]) {
     handleCmd(input);
   } 
 
+  free(input);
+
 	return 0;
 }
 
@@ -136,7 +138,7 @@ void handleCd(const int cmdArgc, char *cmdArgv[]) {
   }
 
   if (0 != e /* failed to change dir,  change to home dir if chdir() fails */)
-    chdir(getenv("HOME"));
+    e = chdir(getenv("HOME"));
 }
 
 /* Executes "printenv | sort | pager" if no arguments are given to the command.
