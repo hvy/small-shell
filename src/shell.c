@@ -19,7 +19,8 @@ void fatal(char *msg) {
   exit(EXIT_FAILURE);
 }
 
-void sigintHandler(int sigNum);
+void sigintHandler(int sig);
+void sigchldHandler(int sig);
 
 int parse(char *input, char *cmdArgv[], int *foreground);
 int command(char *cmdArgv[], int foreground);
@@ -43,6 +44,9 @@ int main(int argc, char *argv[], char *envp[]) {
   */
   if (signal(SIGINT, sigintHandler) == SIG_ERR) 
     fatal("Could not create signal handler for SIGINT");
+
+  if (signal(SIGCHLD, sigchldHandler) == SIG_ERR)
+    fatal("Could not create signal handler for SIGCHLD");
 
   /* Main loop of the Shell */
   while(1) {
@@ -112,13 +116,21 @@ int command(char **cmdArgv, int foreground) {
   if (pid < 0) fatal("Failed to fork parent process");
   else if (0 == pid ) {
     /* Process is a child process */
-    int e = execvp(cmdArgv[0], cmdArgv);
-    printf("%d\n", e);
-    printf("%d\n", errno);
+    execvp(cmdArgv[0], cmdArgv);
+    switch (errno) {
+      case 2: 
+        printf("command not found: %s\n", cmdArgv[0]);
+        break;
+      default:
+        printf("errno %d\n", errno);
+    }
     exit(EXIT_SUCCESS);
   } else {
     /* Process is a parent process */
     if (foreground) waitpid(pid, NULL, 0);
+    else {
+      /*TODO*/
+    }
   }
 
   return 0;
@@ -132,4 +144,8 @@ void sigintHandler(int sigNum) {
    * if not exiting, need to reinstall as signal handler again*/
 
   exit(0);
+}
+
+void sigchldHandler(int sig) {
+  while (waitpid((pid_t) (-1), 0, WNOHANG) > 0);
 }
