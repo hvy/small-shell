@@ -118,7 +118,7 @@ int command(char **cmdArgv, int foreground) {
     exit(EXIT_SUCCESS);
   } else {
     /* Process is a parent process */
-  
+    if (foreground) waitpid(pid, NULL, 0);
   }
 
   return 0;
