@@ -2,11 +2,14 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <signal.h>
-#include <bits/sigaction.h> /* needed to use sigaction */
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+
+#ifndef __APPLE__
+  #include <bits/sigaction.h> /* needed to use sigaction */
+#endif
 
 /* Background proess termination detection using signal handlers(1), or polling(0) */
 #define SIGNALDETECTION       0
