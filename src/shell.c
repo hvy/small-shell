@@ -80,14 +80,14 @@ void printCwd() {
 }
 
 void readCmd(char *cmd) {
-  int bytesRead;
-  size_t maxInputChars;
+  char *e;
+  int maxInputChars;
   
   maxInputChars = MAX_INPUT_CHARS;
-  bytesRead = getline(&cmd, &maxInputChars, stdin);
+  e = fgets(cmd, maxInputChars, stdin);
   
-  if(-1 == bytesRead)
-    fatal("Failed to read from stdin using getline()"); 
+  if(NULL == e)
+    fatal("Failed to read from stdin using fgets()"); 
 }
 
 void handleCmd(char *cmd) {
