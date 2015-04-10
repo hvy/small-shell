@@ -34,15 +34,6 @@ void sigchldHandler(int sig) {
 void registerSignalHandlers() {
   struct sigaction saChild;
   
-  /*
-  if (signal(SIGINT, sigintHandler) == SIG_ERR) 
-    fatal("Could not create signal handler for SIGINT");
-  */
-  /*
-  if (signal(SIGCHLD, sigchldHandler) == SIG_ERR)
-    fatal("Could not create signal handler for SIGCHLD");
-  */
-
   saChild.sa_handler = &sigchldHandler;
   sigemptyset(&saChild.sa_mask);
   /*saChild.sa_flags = SA_RESTART | SA_NOCLDSTOP;*/
@@ -61,9 +52,6 @@ void handleCheckEnv(const int cmdArgc, char *cmdArgv[]);
 int main(int argc, char *argv[], char *envp[]) {
   
   char *input = (char*) malloc(sizeof(char) * MAX_INPUT_CHARS);
-  
-  /* Will store the current working directory */
-  char cwd[MAX_DIRECTORY_CHARS];
   
   registerSignalHandlers();
 
