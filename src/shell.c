@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <time.h>
 
 #ifndef __APPLE__
   #include <bits/sigaction.h> /* needed to use sigaction */
@@ -233,26 +234,24 @@ void handleCheckEnv(const int cmdArgc, char *cmdArgv[]) {
 
   childPid = wait(&status); /* wait for the first child process */
   if(-1 == childPid) fatal("Failed at first wait()");
-
+  
   if(WIFEXITED(status)) {
     childStatus = WEXITSTATUS(status);
     if(0 != childStatus) fatal("Failed at first child process");
+  
   } else {
     if(WIFSIGNALED(status)) fatal("Failed by a signal from the child process");
-    
-    childPid = wait(&status); /* wait for the second child process */ 
-    if(-1 == childPid) fatal("Failed at second wait()");
-    
-    if(WIFEXITED(status)) {
-      childStatus = WEXITSTATUS(status);
-      if(0 != childStatus) fatal("Failed at second child process");
-    } else {
-      if(WIFSIGNALED(status)) fatal("Failed by a signal from the child process");
-    }
   }
-
-  /* TODO only return and do not exit */
-  exit(0);
+ 
+  childPid = wait(&status); /* wait for the second child process */ 
+  if(-1 == childPid) fatal("Failed at second wait()");
+    
+  if(WIFEXITED(status)) {
+    childStatus = WEXITSTATUS(status);
+    if(0 != childStatus) fatal("Failed at second child process");
+  } else {
+    if(WIFSIGNALED(status)) fatal("Failed by a signal from the child process");
+  }
 }
 
 /* Splits input and adds each word in cmdArgv.
