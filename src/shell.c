@@ -17,8 +17,6 @@
 #define MAX_INPUT_CHARS       ( 100 )
 #define MAX_DIRECTORY_CHARS   ( 300 )
 #define MAX_CMD_ARGS          ( 10 )
-#define PIPE_READ_SIDE        ( 0 )
-#define PIPE_WRITE_SIDE       ( 1 )
 
 /* Linked list for processes */
 struct processNode {
@@ -160,36 +158,49 @@ void handleCd(const int cmdArgc, char *cmdArgv[]) {
     e = chdir(getenv("HOME"));
 }
 
-/* Executes "printenv | sort | pager" if no arguments are given to the command.
-   If arguments are passed to the command then 
-   "printenv | grep <arguments> | sort | pager" is be executed. The pager 
-   executed is selected primarily based on the value of the users "PAGER" 
-   environment variable. If no such variable is set then it tries to execute 
-   "less" and if that fails "more". */
+/** 
+ * Executes "printenv | sort | pager" if no arguments are given to the command.
+ * If arguments are passed to the command then 
+ * "printenv | grep <arguments> | sort | pager" is be executed. The pager 
+ * executed is selected primarily based on the value of the users "PAGER" 
+ * environment variable. If no such variable is set then it tries to execute 
+ * "less" and if that fails "more". 
+ */
 void handleCheckEnv(const int cmdArgc, char *cmdArgv[]) {
-	int e,  childStatus, status;
-  int pipefd[2];
+	/* File descriptors for the two pipes
+	 * pipefd[0] read end of fst pipe, read by sort/grep
+	 * pipefd[1] write end of fst pipe, written to by printenv
+	 * pipefd[2] read end of snd pipe, read by pager
+	 * pipefd[3] write end of snd pipe, written by sort/grep */
+	int pipefd[4];
+	int e, status;
   char *pager;
-  char *emptyArgv[2];
-	pid_t childpid, fstchildpid, sndchildpid;
+	pid_t childpid;
 
   /* Pager is set to NULL if PAGER isn't found. 
      If so, try less, else use pager */
 	pager = getenv("PAGER");
 
-  /* pipe */
+	/* Create the two pipes */
   e = pipe(pipefd);
-  if(-1 == e) fatal("Failed in checkEnv when calling pipe()");
-
+  if(-1 == e) fatal("Failed to create the fst pipe in checkEnv");
+  e = pipe(pipefd + 2);
+  if(-1 == e) fatal("Failed to create the snd pipe in checkEnv");
+	
+	/* printenv  */
 	childpid = fork();
   if(0 > childpid) {
 		fatal("Failed to fork by calling fork()");
 	} else if(0 == childpid) {
-    e = dup2(pipefd[PIPE_WRITE_SIDE], STDOUT_FILENO);  
-    if(-1 == e) fatal("Failed in printenv when calling dup2()");
-    e = close(pipefd[PIPE_WRITE_SIDE]);
+    e = dup2(pipefd[1], STDOUT_FILENO);      
+		if(-1 == e) fatal("Failed in printenv when calling dup2()");
+    e = close(pipefd[0]);
     if(-1 == e) fatal("Failed in printenv when calling close()");
-    e = close(pipefd[PIPE_READ_SIDE]);
+    e = close(pipefd[1]);
+    if(-1 == e) fatal("Failed in printenv when calling close()");
+    e = close(pipefd[2]);
+    if(-1 == e) fatal("Failed in printenv when calling close()");
+    e = close(pipefd[3]);
     if(-1 == e) fatal("Failed in printenv when calling close()");
 
 		cmdArgv[0] = "printenv";
@@ -199,17 +210,22 @@ void handleCheckEnv(const int cmdArgc, char *cmdArgv[]) {
     fatal("Failed to execute printenv"); 
   }
 
-	fstchildpid = childpid;
-
+	/* sort/grep */
 	childpid = fork();
 	if(0 > childpid) {
 		fatal("Failed to fork by calling fork()");
 	} else if(0 == childpid) {
-    e = dup2(pipefd[PIPE_READ_SIDE], STDIN_FILENO);  
-    if(-1 == e) fatal("Failed in sort/grep when calling dup2()");
-     e = close(pipefd[PIPE_WRITE_SIDE]);
+    e = dup2(pipefd[0], STDIN_FILENO);  
+		if(-1 == e) fatal("Failed in sort/grep when calling dup2()");
+    e = dup2(pipefd[3], STDOUT_FILENO);  
+		if(-1 == e) fatal("Failed in sort/grep when calling dup2()");
+    e = close(pipefd[0]);
     if(-1 == e) fatal("Failed in sort/grep when calling close()");
-    e = close(pipefd[PIPE_READ_SIDE]);
+    e = close(pipefd[1]);
+    if(-1 == e) fatal("Failed in sort/grep when calling close()");
+    e = close(pipefd[2]);
+    if(-1 == e) fatal("Failed in sort/grep when calling close()");
+    e = close(pipefd[3]);
     if(-1 == e) fatal("Failed in sort/grep when calling close()");
 
     if(2 == cmdArgc) {
@@ -224,24 +240,49 @@ void handleCheckEnv(const int cmdArgc, char *cmdArgv[]) {
     fatal("Failed to execute sort/grep"); 
   }
 	
-	sndchildpid = childpid;
+	/* pager */
+	childpid = fork();
+	if(0 > childpid) {
+		fatal("Failed to fork by calling fork()");
+	} else if(0 == childpid) {
+    e = dup2(pipefd[2], STDIN_FILENO);  
+		if(-1 == e) fatal("Failed in printenv when calling dup2()");
+    e = close(pipefd[0]);
+    if(-1 == e) fatal("Failed in printenv when calling close()");
+    e = close(pipefd[1]);
+    if(-1 == e) fatal("Failed in printenv when calling close()");
+    e = close(pipefd[2]);
+    if(-1 == e) fatal("Failed in printenv when calling close()");
+    e = close(pipefd[3]);
+    if(-1 == e) fatal("Failed in printenv when calling close()");
+
+		if(NULL != pager) {
+			cmdArgv[0] = "pager";
+		} else {
+      cmdArgv[0] = "less";
+		}
+      	
+		cmdArgv[1] = NULL;
+		execvp(cmdArgv[0], cmdArgv);
+   
+    fatal("Failed to execute pager"); 
+  }
 	
-  e = close(pipefd[PIPE_READ_SIDE]);
-  if(-1 == e) fatal("Failed in sort/grep when calling close()");
-  e = close(pipefd[PIPE_WRITE_SIDE]);
-  if(-1 == e) fatal("Failed in sort/grep when calling close()");
+	e = close(pipefd[0]);
+  if(-1 == e) fatal("Failed in main process when calling close()");
+  e = close(pipefd[1]);
+  if(-1 == e) fatal("Failed in main process when calling close()");
+	e = close(pipefd[2]);
+  if(-1 == e) fatal("Failed in main process when calling close()");
+  e = close(pipefd[3]);
+  if(-1 == e) fatal("Failed in main process when calling close()");
 
-
-	fprintf(stderr, "Waiting for pid %d\n", fstchildpid);
-	pollpid(fstchildpid);
-	fprintf(stderr, "done\n");
-
-	fprintf(stderr, "Waiting for pid %d\n", sndchildpid);
-	pollpid(sndchildpid);
-	fprintf(stderr, "done\n");
-
-
-
+	/* TODO Handle errors */
+	#if !SIGNALDETECTION
+		wait(&status);
+		wait(&status);
+		wait(&status);
+	#endif
 }
 
 /* Splits input and adds each word in cmdArgv.
