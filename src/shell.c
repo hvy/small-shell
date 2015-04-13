@@ -30,23 +30,21 @@ struct processNode {
 
 struct processNode *headProcess = NULL;
 
+void sigchldHandler(int sig);
+void sigintHandler(int sigNum);
+void registerSignalHandlers();
+void removeZombieProcesses();
 void printCwd();
 void readCmd(char *cmd);
 void handleCmd(char *cmd);
 void handleOtherCmd(char *cmdArgv[], int foreground);
-void pollpid(const pid_t pid);
-void sigintHandler(int sigNum);
-void sigchldHandler(int sig);
-void registerSignalHandlers();
 void pollpid(const pid_t pid);
 
 int main(int argc, char *argv[], char *envp[]) {
   
   char *input = (char*) malloc(sizeof(char) * MAX_INPUT_CHARS);
 
-	#if SIGNALDETECTION == 1
-  	registerSignalHandlers();
-	#endif
+  registerSignalHandlers();
 
 	/* Main loop of the Shell */
   while(1) {
@@ -58,6 +56,30 @@ int main(int argc, char *argv[], char *envp[]) {
   free(input);
 
   return 0;
+}
+
+void sigintHandler(int sigNum) {
+  /*
+   * TODO: send SIGINT/SIGTERM to foreground child
+   */
+  signal(SIGINT, sigintHandler);
+  fflush(stdout);
+}
+
+void sigchldHandler(int sig) {
+  while (waitpid((pid_t) (-1), 0, WNOHANG) > 0);
+}
+
+void registerSignalHandlers() {
+  signal(SIGINT, sigintHandler);
+  
+	#if SIGNALDETECTION
+  	signal(SIGCHLD, &sigchldHandler);
+	#endif
+}
+
+void removeZombieProcesses() {
+  while (waitpid((pid_t) (-1), 0, WNOHANG) > 0);
 }
 
 void printCwd() {
@@ -79,8 +101,10 @@ void readCmd(char *cmd) {
   maxInputChars = MAX_INPUT_CHARS;
   e = fgets(cmd, maxInputChars, stdin);
   
-  if(NULL == e)
-    fatal("Failed to read from stdin using fgets()"); 
+  if(NULL == e) {
+    if (errno == EINTR) readCmd(cmd);
+     else fatal("Failed to read from stdin using fgets()");
+  }
 }
 
 void handleCmd(char *cmd) {
@@ -96,7 +120,7 @@ void handleCmd(char *cmd) {
     while (headProcess) {
       struct processNode *p = headProcess;
       headProcess = p->next;
-      kill(p->pid, SIGKILL); /* TODO: maybe SIGTERM is better here? */
+      kill(p->pid, SIGTERM);
       free(p);
     }
 
@@ -112,34 +136,6 @@ void handleCmd(char *cmd) {
     handleCheckEnvCmd(cmdArgc, cmdArgv);
   else 
     handleOtherCmd(cmdArgv, foreground); 
-}
-
-void sigintHandler(int sigNum) {
-  /*
-   * TODO: send to foreground child
-   */
-  exit(0);
-}
-
-void sigchldHandler(int sig) {
-  while (waitpid((pid_t) (-1), 0, WNOHANG) > 0);
-}
-
-void registerSignalHandlers() {
-  struct sigaction sa;
-  struct sigaction saChild;
-  
-  sa.sa_handler = &sigintHandler;
-  sigemptyset(&sa.sa_mask);
-  if (sigaction(SIGINT, &sa, 0) == -1)
-    fatal("Could not create signal handlers for SIGINT");
-
-  saChild.sa_handler = &sigchldHandler;
-  sigemptyset(&saChild.sa_mask);
-  /*saChild.sa_flags = SA_RESTART | SA_NOCLDSTOP;*/
-	
-	if (sigaction(SIGCHLD, &saChild, 0) == -1)
-    fatal("Could not create signal handler for SIGCHLD");
 }
 
 void pollpid(const pid_t pid) {
