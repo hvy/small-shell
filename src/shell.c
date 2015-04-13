@@ -14,11 +14,9 @@
 
 /* Background proess termination detection using signal handlers(1), or polling(0) */
 #define SIGNALDETECTION       ( 0 )
-
 #define MAX_INPUT_CHARS       ( 100 )
 #define MAX_DIRECTORY_CHARS   ( 300 )
 #define MAX_CMD_ARGS          ( 10 )
-
 #define PIPE_READ_SIDE        ( 0 )
 #define PIPE_WRITE_SIDE       ( 1 )
 
@@ -57,7 +55,8 @@ void registerSignalHandlers() {
   saChild.sa_handler = &sigchldHandler;
   sigemptyset(&saChild.sa_mask);
   /*saChild.sa_flags = SA_RESTART | SA_NOCLDSTOP;*/
-  if (sigaction(SIGCHLD, &saChild, 0) == -1)
+	
+	if (sigaction(SIGCHLD, &saChild, 0) == -1)
     fatal("Could not create signal handler for SIGCHLD");
 }
 
@@ -68,14 +67,17 @@ void readCmd(char *cmd);
 void handleCmd(char *cmd);
 void handleCd(const int cmdArgc, char *cmdArgv[]);
 void handleCheckEnv(const int cmdArgc, char *cmdArgv[]);
+void pollpid(const pid_t pid);
 
 int main(int argc, char *argv[], char *envp[]) {
   
   char *input = (char*) malloc(sizeof(char) * MAX_INPUT_CHARS);
-  
-  registerSignalHandlers();
 
-  /* Main loop of the Shell */
+	#if SIGNALDETECTION == 1
+  	registerSignalHandlers();
+	#endif
+
+	/* Main loop of the Shell */
   while(1) {
     printCwd();
     readCmd(input);
@@ -165,93 +167,81 @@ void handleCd(const int cmdArgc, char *cmdArgv[]) {
    environment variable. If no such variable is set then it tries to execute 
    "less" and if that fails "more". */
 void handleCheckEnv(const int cmdArgc, char *cmdArgv[]) {
-  int e, status, childStatus;
+	int e,  childStatus, status;
   int pipefd[2];
   char *pager;
   char *emptyArgv[2];
-  pid_t childPid;
-   
+	pid_t childpid, fstchildpid, sndchildpid;
+
   /* Pager is set to NULL if PAGER isn't found. 
      If so, try less, else use pager */
-  pager = getenv("PAGER");
-  
+	pager = getenv("PAGER");
+
   /* pipe */
   e = pipe(pipefd);
   if(-1 == e) fatal("Failed in checkEnv when calling pipe()");
-  
-  /* fork  */
-  childPid = fork();
-  if(0 == childPid /* printenv */) {
-    e = dup2(pipefd[PIPE_WRITE_SIDE], STDOUT_FILENO);
+
+	childpid = fork();
+  if(0 > childpid) {
+		fatal("Failed to fork by calling fork()");
+	} else if(0 == childpid) {
+    e = dup2(pipefd[PIPE_WRITE_SIDE], STDOUT_FILENO);  
     if(-1 == e) fatal("Failed in printenv when calling dup2()");
-    e = close(pipefd[PIPE_READ_SIDE]);
-    if(-1 == e) fatal("Failed in printenv when calling close()");
     e = close(pipefd[PIPE_WRITE_SIDE]);
     if(-1 == e) fatal("Failed in printenv when calling close()");
-    
-    emptyArgv[0] = "printenv";
-    emptyArgv[1] = (char *) NULL;
-    execvp(emptyArgv[0], emptyArgv);
-    
-    /* Reaching this line means that printenv failed */
+    e = close(pipefd[PIPE_READ_SIDE]);
+    if(-1 == e) fatal("Failed in printenv when calling close()");
+
+		cmdArgv[0] = "printenv";
+		cmdArgv[1] = NULL;
+    execvp(cmdArgv[0], cmdArgv);
+
     fatal("Failed to execute printenv"); 
-    /* End of printenv */     
   }
 
-  if(-1 == childPid) fatal("Failed to fork by calling fork()");
+	fstchildpid = childpid;
 
-  childPid = fork();
-  if(0 == childPid /* sort or grep */) {
+	childpid = fork();
+	if(0 > childpid) {
+		fatal("Failed to fork by calling fork()");
+	} else if(0 == childpid) {
     e = dup2(pipefd[PIPE_READ_SIDE], STDIN_FILENO);  
     if(-1 == e) fatal("Failed in sort/grep when calling dup2()");
-    e = close(pipefd[PIPE_WRITE_SIDE]);
+     e = close(pipefd[PIPE_WRITE_SIDE]);
     if(-1 == e) fatal("Failed in sort/grep when calling close()");
     e = close(pipefd[PIPE_READ_SIDE]);
     if(-1 == e) fatal("Failed in sort/grep when calling close()");
 
-    if(2 == cmdArgc /* no args to checkEnv */) {
-      emptyArgv[0] = "sort";
-      emptyArgv[1] = (char *) NULL;
-      execvp(emptyArgv[0], emptyArgv);
+    if(2 == cmdArgc) {
+			cmdArgv[0] = "sort";
+      cmdArgv[1] = NULL;
+      execvp(cmdArgv[0], cmdArgv);
     } else {
       cmdArgv[0] = "grep";
-      /* TODO Handle this in a nicer manner */
       execvp(cmdArgv[0], cmdArgv);
     }
     
-    /* Reaching this line means that printenv failed */
     fatal("Failed to execute sort/grep"); 
-    /* End of printenv */    
-  }   
-
-  if(-1 == childPid) fatal("Failed to fork by calling fork()");
- 
-  /* Code from here is only run by the parent process */
+  }
+	
+	sndchildpid = childpid;
+	
   e = close(pipefd[PIPE_READ_SIDE]);
   if(-1 == e) fatal("Failed in sort/grep when calling close()");
   e = close(pipefd[PIPE_WRITE_SIDE]);
   if(-1 == e) fatal("Failed in sort/grep when calling close()");
 
-  childPid = wait(&status); /* wait for the first child process */
-  if(-1 == childPid) fatal("Failed at first wait()");
-  
-  if(WIFEXITED(status)) {
-    childStatus = WEXITSTATUS(status);
-    if(0 != childStatus) fatal("Failed at first child process");
-  
-  } else {
-    if(WIFSIGNALED(status)) fatal("Failed by a signal from the child process");
-  }
- 
-  childPid = wait(&status); /* wait for the second child process */ 
-  if(-1 == childPid) fatal("Failed at second wait()");
-    
-  if(WIFEXITED(status)) {
-    childStatus = WEXITSTATUS(status);
-    if(0 != childStatus) fatal("Failed at second child process");
-  } else {
-    if(WIFSIGNALED(status)) fatal("Failed by a signal from the child process");
-  }
+
+	fprintf(stderr, "Waiting for pid %d\n", fstchildpid);
+	pollpid(fstchildpid);
+	fprintf(stderr, "done\n");
+
+	fprintf(stderr, "Waiting for pid %d\n", sndchildpid);
+	pollpid(sndchildpid);
+	fprintf(stderr, "done\n");
+
+
+
 }
 
 /* Splits input and adds each word in cmdArgv.
@@ -291,7 +281,7 @@ int parse(char *const input, char *cmdArgv[], int *foreground) {
 }
 
 int command(char **cmdArgv, int foreground) {
-  pid_t pid;
+  pid_t pid, w;
   pid = fork();
 
   if (pid < 0) fatal("Failed to fork parent process");
@@ -308,8 +298,10 @@ int command(char **cmdArgv, int foreground) {
     exit(EXIT_SUCCESS);
   } else {
     /* Process is a parent process */
-    if (foreground) waitpid(pid, NULL, 0);
-    else {
+    if (foreground) {
+			w = waitpid(pid, NULL, 0);
+			printf("Wait ret: %d,\n", w);
+		} else {
       struct processNode *newProcess = malloc(sizeof(struct processNode));
       newProcess -> pid = pid; 
       newProcess -> next = headProcess;
@@ -318,5 +310,22 @@ int command(char **cmdArgv, int foreground) {
   }
 
   return 0;
+}
+
+void pollpid(const pid_t pid) {
+	
+	int status;
+	pid_t polledpid;
+
+	polledpid = waitpid(pid, &status, 0);
+
+	if(-1 == polledpid) fatal("Failed to poll using waitpid()");
+  if(WIFEXITED(status)) {
+    polledpid = WEXITSTATUS(status);
+    if(0 != polledpid) 
+			fatal("Bad WEXITSTATUS in wait()");
+  } else {
+    if(WIFSIGNALED(status)) fatal("Process exited by signal in wait()");
+  }
 }
 
