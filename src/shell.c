@@ -34,9 +34,10 @@ void fatal(char *msg) {
 
 void sigintHandler(int sigNum) {
   /*
-   * TODO: send to foreground child
+   * TODO: send SIGINT/SIGTERM to foreground child
    */
-  exit(0);
+  signal(SIGINT, sigintHandler);
+  fflush(stdout);
 }
 
 void sigchldHandler(int sig) {
@@ -44,20 +45,15 @@ void sigchldHandler(int sig) {
 }
 
 void registerSignalHandlers() {
-  struct sigaction sa;
-  struct sigaction saChild;
+  signal(SIGINT, sigintHandler);
   
-  sa.sa_handler = &sigintHandler;
-  sigemptyset(&sa.sa_mask);
-  if (sigaction(SIGINT, &sa, 0) == -1)
-    fatal("Could not create signal handlers for SIGINT");
+#if SIGNALDETECTION
+  signal(SIGCHLD, &sigchldHandler);
+#endif
+}
 
-  saChild.sa_handler = &sigchldHandler;
-  sigemptyset(&saChild.sa_mask);
-  /*saChild.sa_flags = SA_RESTART | SA_NOCLDSTOP;*/
-	
-	if (sigaction(SIGCHLD, &saChild, 0) == -1)
-    fatal("Could not create signal handler for SIGCHLD");
+void removeZombieProcesses() {
+  while (waitpid((pid_t) (-1), 0, WNOHANG) > 0);
 }
 
 int parse(char *input, char *cmdArgv[], int *foreground);
@@ -73,9 +69,7 @@ int main(int argc, char *argv[], char *envp[]) {
   
   char *input = (char*) malloc(sizeof(char) * MAX_INPUT_CHARS);
 
-	#if SIGNALDETECTION == 1
-  	registerSignalHandlers();
-	#endif
+  registerSignalHandlers();
 
 	/* Main loop of the Shell */
   while(1) {
@@ -108,8 +102,10 @@ void readCmd(char *cmd) {
   maxInputChars = MAX_INPUT_CHARS;
   e = fgets(cmd, maxInputChars, stdin);
   
-  if(NULL == e)
-    fatal("Failed to read from stdin using fgets()"); 
+  if(NULL == e) {
+    if (errno == EINTR) readCmd(cmd);
+     else fatal("Failed to read from stdin using fgets()");
+  }
 }
 
 void handleCmd(char *cmd) {
@@ -125,7 +121,7 @@ void handleCmd(char *cmd) {
     while (headProcess) {
       struct processNode *p = headProcess;
       headProcess = p->next;
-      kill(p->pid, SIGKILL); /* TODO: maybe SIGTERM is better here? */
+      kill(p->pid, SIGTERM);
       free(p);
     }
 
