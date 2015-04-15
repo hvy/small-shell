@@ -102,14 +102,21 @@ void handleCheckEnvCmd(const int cmdArgc, char *cmdArgv[]) {
     if(-1 == e) fatal("Failed in printenv when calling close()");
 
 		if(NULL != pager) {
+			/* Try pager, since it was found */
 			cmdArgv[0] = "pager";
+	   	cmdArgv[1] = NULL;
+			execvp(cmdArgv[0], cmdArgv);
 		} else {
+		  /* Try less since pager wasn't found */
       cmdArgv[0] = "less";
+	   	cmdArgv[1] = NULL;
+			execvp(cmdArgv[0], cmdArgv);
+		
+			/* Try more since less failed */
+			cmdArgv[0] = "more";
+			execvp(cmdArgv[0], cmdArgv);
 		}
-      	
-		cmdArgv[1] = NULL;
-		execvp(cmdArgv[0], cmdArgv);
-   
+
     fatal("Failed to execute pager"); 
   }
 	
