@@ -1,5 +1,6 @@
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/time.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -157,8 +158,11 @@ void pollpid(const pid_t pid) {
 
 void handleOtherCmd(char *cmdArgv[], int foreground) {
   pid_t pid, w;
-  pid = fork();
+  struct timeval tv_start, tv_finish;
+  long running_time; /* foreground process running time in sec */
 
+  pid = fork();
+   
   if (pid < 0) 
 		fatal("Failed to fork parent process");
   else if (0 == pid ) {
@@ -175,9 +179,13 @@ void handleOtherCmd(char *cmdArgv[], int foreground) {
   } else {
     /* Process is a parent process */
     if (foreground) {
+      gettimeofday(&tv_start, NULL);
 			/* TODO Handle error properly */
-			w = waitpid(pid, NULL, 0);
-			printf("Wait ret: %d,\n", w);
+      w = waitpid(pid, NULL, 0);
+	    gettimeofday(&tv_finish, NULL);
+      running_time = tv_finish.tv_sec - tv_start.tv_sec;
+      printf("Foreground process running time: %lds\n", running_time);
+      printf("Wait ret: %d,\n", w);
 		} else {
       /* TODO Make sure malloced memory is freed */
 			struct processNode *newProcess = malloc(sizeof(struct processNode));
