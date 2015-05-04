@@ -28,8 +28,8 @@ struct processNode {
   pid_t pid;
   struct processNode *next;
 };
-
-struct processNode *headProcess = NULL;
+struct processNode *finishedProcesses = NULL;
+struct processNode *lastFinishedProcess = NULL;
 
 void sigchldHandler(int sig);
 void sigintHandler(int sigNum);
@@ -59,17 +59,29 @@ int main(int argc, char *argv[], char *envp[]) {
 }
 
 void sigintHandler(int sigNum) {
-  /*
-   * TODO: send SIGINT/SIGTERM to foreground child
-   */
-  printf("swag\n");
   signal(SIGINT, sigintHandler);
   fflush(stdout);
 }
 
 void sigchldHandler(int sig) {
-  while (waitpid((pid_t) (-1), 0, WNOHANG) > 0) {
-    /* add information about finished */ 
+  pid_t pid;
+  int status;
+  
+  signal(SIGCHLD, sigchldHandler);
+  while ((pid = waitpid((pid_t) (-1), &status, 0)) > 0) {
+    /* Add to list of finished processes */
+    struct processNode *newNode = malloc(sizeof(struct processNode));
+    if (newNode) {
+      newNode -> pid = pid;
+      newNode -> next = NULL;
+      if (finishedProcesses == NULL) {
+        finishedProcesses = newNode;
+        lastFinishedProcess = newNode;
+      } else {
+        lastFinishedProcess -> next = newNode;
+        lastFinishedProcess = newNode;
+      }
+    }
   }
 }
 
