@@ -41,9 +41,7 @@ int main(int argc, char *argv[], char *envp[]) {
   
   char *input = (char*) malloc(sizeof(char) * MAX_INPUT_CHARS);
 
-  #if SIGDET
-    registerSignalHandlers();
-  #endif
+  registerSignalHandlers();
     
 	/* Main loop of the Shell */
   while(1) {
@@ -60,12 +58,13 @@ int main(int argc, char *argv[], char *envp[]) {
 
 void printFinBgProcs() {
   int i = 1;
+  struct processNode *toFree;
 
   #if SIGDET
     struct processNode *pn = finishedProcesses;
     while (pn != NULL) {
       printf("[%d] %d\n", i++, pn -> pid);
-      processNode *toFree = pn;
+      toFree = pn;
       pn = pn -> next;
       free(toFree);
     }
@@ -97,14 +96,15 @@ void sigintHandler(int sigNum) {
 void sigchldHandler(int sig) {
   pid_t pid;
   int status;
-  
+  struct processNode *newNode;
+     
   signal(SIGCHLD, sigchldHandler);
   
   sighold();
   while ((pid = waitpid((pid_t) (-1), &status, WNOHANG | WUNTRACED)) > 0) {
     if (WIFEXITED(status)) {
       /* Add to list of finished processes */
-      struct processNode *newNode = malloc(sizeof(struct processNode));
+      newNode = malloc(sizeof(struct processNode));
       if (newNode) {
         newNode -> pid = pid;
         newNode -> next = NULL;
