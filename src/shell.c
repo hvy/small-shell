@@ -19,7 +19,7 @@
 #include "errhandler.h"
 
 /* Background proess termination detection using signal handlers(1), or polling(0) */
-#define SIGNALDETECTION       ( 0 )
+#define SIGNALDETECTION       ( 1 )
 #define MAX_INPUT_CHARS       ( 100 )
 #define MAX_DIRECTORY_CHARS   ( 300 )
 
@@ -34,7 +34,6 @@ struct processNode *headProcess = NULL;
 void sigchldHandler(int sig);
 void sigintHandler(int sigNum);
 void registerSignalHandlers();
-void removeZombieProcesses();
 void printCwd();
 void readCmd(char *cmd);
 void handleCmd(char *cmd);
@@ -63,12 +62,15 @@ void sigintHandler(int sigNum) {
   /*
    * TODO: send SIGINT/SIGTERM to foreground child
    */
+  printf("swag\n");
   signal(SIGINT, sigintHandler);
   fflush(stdout);
 }
 
 void sigchldHandler(int sig) {
-  while (waitpid((pid_t) (-1), 0, WNOHANG) > 0);
+  while (waitpid((pid_t) (-1), 0, WNOHANG) > 0) {
+    /* add information about finished */ 
+  }
 }
 
 void registerSignalHandlers() {
@@ -77,10 +79,6 @@ void registerSignalHandlers() {
 	#if SIGNALDETECTION
   	signal(SIGCHLD, &sigchldHandler);
 	#endif
-}
-
-void removeZombieProcesses() {
-  while (waitpid((pid_t) (-1), 0, WNOHANG) > 0);
 }
 
 void printCwd() {
@@ -118,13 +116,6 @@ void handleCmd(char *cmd) {
   /* TODO Handle exit properly. Make sure no zombie processes are left. */
   /* Handle exit command */
   if(strcmp(cmd, "exit\n") == 0) {
-    while (headProcess) {
-      struct processNode *p = headProcess;
-      headProcess = p->next;
-      kill(p->pid, SIGTERM);
-      free(p);
-    }
-
     exit(0);    
   }
 
@@ -186,12 +177,6 @@ void handleOtherCmd(char *cmdArgv[], int foreground) {
       running_time = tv_finish.tv_sec - tv_start.tv_sec;
       printf("Foreground process running time: %lds\n", running_time);
       printf("Wait ret: %d,\n", w);
-		} else {
-      /* TODO Make sure malloced memory is freed */
-			struct processNode *newProcess = malloc(sizeof(struct processNode));
-      newProcess -> pid = pid; 
-      newProcess -> next = headProcess;
-      headProcess = newProcess;
-    }
+		}
   }
 }
