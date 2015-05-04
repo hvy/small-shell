@@ -39,6 +39,7 @@ void printFinBgProcs();
 void readCmd(char *cmd);
 void handleCmd(char *cmd);
 void handleOtherCmd(char *cmdArgv[], int foreground);
+pid_t pollProcess();
 void pollpid(const pid_t pid);
 
 int main(int argc, char *argv[], char *envp[]) {
@@ -46,10 +47,7 @@ int main(int argc, char *argv[], char *envp[]) {
   char *input = (char*) malloc(sizeof(char) * MAX_INPUT_CHARS);
 
   #if SIGDET
-    printf("Using signal detection\n");
     registerSignalHandlers();
-  #else
-    printf("Using polling\n");
   #endif
     
 	/* Main loop of the Shell */
@@ -66,11 +64,37 @@ int main(int argc, char *argv[], char *envp[]) {
 }
 
 void printFinBgProcs() {
+  
+  int i = 1;
+  pid_t fin_pid;
+
   #if SIGDET
 
-  #else 
-
+  #else /* Use polling by using wait/waitpid */ 
+    while((fin_pid = pollProcess()) > 0) {
+      printf("[%d] %d\n", i++, fin_pid);
+    }
   #endif
+}
+
+pid_t pollProcess() {
+	
+	int status;
+	pid_t polledpid;
+
+	polledpid = waitpid((pid_t) -1, &status, WNOHANG | WUNTRACED);
+
+  return polledpid;
+
+  /*
+  if(WIFEXITED(status)) {
+    polledpid = WEXITSTATUS(status);
+    if(0 != polledpid) 
+			fatal("Bad WEXITSTATUS in wait()");
+  } else {
+    if(WIFSIGNALED(status)) fatal("Process exited by signal in wait()");
+  }*/
+
 }
 
 void sigintHandler(int sigNum) {
