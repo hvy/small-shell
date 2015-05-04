@@ -9,17 +9,13 @@
 #include <time.h>
 #include <errno.h>
 
-#ifndef __APPLE__
-  #include <bits/sigaction.h> /* needed to use sigaction */
-#endif
-
 #include "cmdparser.h"
 #include "cmd_cd.h"
 #include "cmd_checkenv.h"
 #include "errhandler.h"
 
 /* Background proess termination detection using signal handlers(1), or polling(0) */
-#define SIGDET                ( 0 )
+#define SIGDET                ( 1 )
 #define MAX_INPUT_CHARS       ( 100 )
 #define MAX_DIRECTORY_CHARS   ( 300 )
 
@@ -28,8 +24,8 @@ struct processNode {
   pid_t pid;
   struct processNode *next;
 };
-
-struct processNode *headProcess = NULL;
+struct processNode *finishedProcesses = NULL;
+struct processNode *lastFinishedProcess = NULL;
 
 void sigchldHandler(int sig);
 void sigintHandler(int sigNum);
@@ -63,13 +59,21 @@ int main(int argc, char *argv[], char *envp[]) {
 }
 
 void printFinBgProcs() {
-  
   int i = 1;
-  pid_t fin_pid;
 
   #if SIGDET
+    struct processNode *pn = finishedProcesses;
+    while (pn != NULL) {
+      printf("[%d] %d\n", i++, pn -> pid);
+      processNode *toFree = pn;
+      pn = pn -> next;
+      free(toFree);
+    }
+    finishedProcesses = NULL;
+    lastFinishedProcess = NULL;
 
   #else /* Use polling by using wait/waitpid */ 
+    pid_t fin_pid;
     while((fin_pid = pollProcess()) > 0) {
       printf("[%d] %d\n", i++, fin_pid);
     }
@@ -86,18 +90,35 @@ pid_t pollProcess() {
 }
 
 void sigintHandler(int sigNum) {
-  /*
-   * TODO: send SIGINT/SIGTERM to foreground child
-   */
-  printf("swag\n");
   signal(SIGINT, sigintHandler);
   fflush(stdout);
 }
 
 void sigchldHandler(int sig) {
-  while (waitpid((pid_t) (-1), 0, WNOHANG) > 0) {
-    /* add information about finished */ 
+  pid_t pid;
+  int status;
+  
+  signal(SIGCHLD, sigchldHandler);
+  
+  sighold();
+  while ((pid = waitpid((pid_t) (-1), &status, WNOHANG | WUNTRACED)) > 0) {
+    if (WIFEXITED(status)) {
+      /* Add to list of finished processes */
+      struct processNode *newNode = malloc(sizeof(struct processNode));
+      if (newNode) {
+        newNode -> pid = pid;
+        newNode -> next = NULL;
+        if (finishedProcesses == NULL) {
+          finishedProcesses = newNode;
+          lastFinishedProcess = newNode;
+        } else {
+          lastFinishedProcess -> next = newNode;
+          lastFinishedProcess = newNode;
+        }
+      }
+    }
   }
+  sigrelse();
 }
 
 void registerSignalHandlers() {
