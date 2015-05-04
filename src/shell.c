@@ -19,7 +19,7 @@
 #include "errhandler.h"
 
 /* Background proess termination detection using signal handlers(1), or polling(0) */
-#define SIGNALDETECTION       ( 1 )
+#define SIGDET                ( 0 )
 #define MAX_INPUT_CHARS       ( 100 )
 #define MAX_DIRECTORY_CHARS   ( 300 )
 
@@ -35,6 +35,7 @@ void sigchldHandler(int sig);
 void sigintHandler(int sigNum);
 void registerSignalHandlers();
 void printCwd();
+void printFinBgProcs();
 void readCmd(char *cmd);
 void handleCmd(char *cmd);
 void handleOtherCmd(char *cmdArgv[], int foreground);
@@ -44,10 +45,16 @@ int main(int argc, char *argv[], char *envp[]) {
   
   char *input = (char*) malloc(sizeof(char) * MAX_INPUT_CHARS);
 
-  registerSignalHandlers();
-
+  #if SIGDET
+    printf("Using signal detection\n");
+    registerSignalHandlers();
+  #else
+    printf("Using polling\n");
+  #endif
+    
 	/* Main loop of the Shell */
   while(1) {
+    printFinBgProcs();
     printCwd();
     readCmd(input);
     handleCmd(input);
@@ -56,6 +63,14 @@ int main(int argc, char *argv[], char *envp[]) {
   free(input);
 
   return 0;
+}
+
+void printFinBgProcs() {
+  #if SIGDET
+
+  #else 
+
+  #endif
 }
 
 void sigintHandler(int sigNum) {
@@ -76,7 +91,7 @@ void sigchldHandler(int sig) {
 void registerSignalHandlers() {
   signal(SIGINT, sigintHandler);
   
-	#if SIGNALDETECTION
+	#if SIGDET
   	signal(SIGCHLD, &sigchldHandler);
 	#endif
 }
