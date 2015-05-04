@@ -1,7 +1,8 @@
+#define _XOPEN_SOURCE 500 /* needed to use sighold/sigrlse */
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/time.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -100,7 +101,7 @@ void sigchldHandler(int sig) {
      
   signal(SIGCHLD, sigchldHandler);
   
-  sighold();
+  sighold(SIGCHLD);
   while ((pid = waitpid((pid_t) (-1), &status, WNOHANG | WUNTRACED)) > 0) {
     if (WIFEXITED(status)) {
       /* Add to list of finished processes */
@@ -118,7 +119,7 @@ void sigchldHandler(int sig) {
       }
     }
   }
-  sigrelse();
+  sigrelse(SIGCHLD);
 }
 
 void registerSignalHandlers() {
