@@ -40,7 +40,6 @@ void readCmd(char *cmd);
 void handleCmd(char *cmd);
 void handleOtherCmd(char *cmdArgv[], int foreground);
 pid_t pollProcess();
-void pollpid(const pid_t pid);
 
 int main(int argc, char *argv[], char *envp[]) {
   
@@ -79,22 +78,11 @@ void printFinBgProcs() {
 
 pid_t pollProcess() {
 	
-	int status;
 	pid_t polledpid;
 
-	polledpid = waitpid((pid_t) -1, &status, WNOHANG | WUNTRACED);
-
+	polledpid = waitpid((pid_t) -1, NULL, WNOHANG);
+  
   return polledpid;
-
-  /*
-  if(WIFEXITED(status)) {
-    polledpid = WEXITSTATUS(status);
-    if(0 != polledpid) 
-			fatal("Bad WEXITSTATUS in wait()");
-  } else {
-    if(WIFSIGNALED(status)) fatal("Process exited by signal in wait()");
-  }*/
-
 }
 
 void sigintHandler(int sigNum) {
@@ -167,23 +155,6 @@ void handleCmd(char *cmd) {
     handleCheckEnvCmd(cmdArgc, cmdArgv);
   else 
     handleOtherCmd(cmdArgv, foreground); 
-}
-
-void pollpid(const pid_t pid) {
-	
-	int status;
-	pid_t polledpid;
-
-	polledpid = waitpid(pid, &status, 0);
-
-	if(-1 == polledpid) fatal("Failed to poll using waitpid()");
-  if(WIFEXITED(status)) {
-    polledpid = WEXITSTATUS(status);
-    if(0 != polledpid) 
-			fatal("Bad WEXITSTATUS in wait()");
-  } else {
-    if(WIFSIGNALED(status)) fatal("Process exited by signal in wait()");
-  }
 }
 
 void handleOtherCmd(char *cmdArgv[], int foreground) {
