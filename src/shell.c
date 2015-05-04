@@ -19,7 +19,7 @@
 #include "errhandler.h"
 
 /* Background proess termination detection using signal handlers(1), or polling(0) */
-#define SIGNALDETECTION       ( 1 )
+#define SIGDET                ( 0 )
 #define MAX_INPUT_CHARS       ( 100 )
 #define MAX_DIRECTORY_CHARS   ( 300 )
 
@@ -35,19 +35,24 @@ void sigchldHandler(int sig);
 void sigintHandler(int sigNum);
 void registerSignalHandlers();
 void printCwd();
+void printFinBgProcs();
 void readCmd(char *cmd);
 void handleCmd(char *cmd);
 void handleOtherCmd(char *cmdArgv[], int foreground);
+pid_t pollProcess();
 void pollpid(const pid_t pid);
 
 int main(int argc, char *argv[], char *envp[]) {
   
   char *input = (char*) malloc(sizeof(char) * MAX_INPUT_CHARS);
 
-  registerSignalHandlers();
-
+  #if SIGDET
+    registerSignalHandlers();
+  #endif
+    
 	/* Main loop of the Shell */
   while(1) {
+    printFinBgProcs();
     printCwd();
     readCmd(input);
     handleCmd(input);
@@ -56,6 +61,40 @@ int main(int argc, char *argv[], char *envp[]) {
   free(input);
 
   return 0;
+}
+
+void printFinBgProcs() {
+  
+  int i = 1;
+  pid_t fin_pid;
+
+  #if SIGDET
+
+  #else /* Use polling by using wait/waitpid */ 
+    while((fin_pid = pollProcess()) > 0) {
+      printf("[%d] %d\n", i++, fin_pid);
+    }
+  #endif
+}
+
+pid_t pollProcess() {
+	
+	int status;
+	pid_t polledpid;
+
+	polledpid = waitpid((pid_t) -1, &status, WNOHANG | WUNTRACED);
+
+  return polledpid;
+
+  /*
+  if(WIFEXITED(status)) {
+    polledpid = WEXITSTATUS(status);
+    if(0 != polledpid) 
+			fatal("Bad WEXITSTATUS in wait()");
+  } else {
+    if(WIFSIGNALED(status)) fatal("Process exited by signal in wait()");
+  }*/
+
 }
 
 void sigintHandler(int sigNum) {
@@ -88,7 +127,7 @@ void sigchldHandler(int sig) {
 void registerSignalHandlers() {
   signal(SIGINT, sigintHandler);
   
-	#if SIGNALDETECTION
+	#if SIGDET
   	signal(SIGCHLD, &sigchldHandler);
 	#endif
 }
