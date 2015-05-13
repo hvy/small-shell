@@ -162,9 +162,9 @@ void handleCmd(char *cmd) {
   /* Handle empty command */
   if(1 == strlen(cmd)) return;
 
-  /* TODO Handle exit properly. Make sure no zombie processes are left. */
   /* Handle exit command */
   if(strcmp(cmd, "exit\n") == 0) {
+    kill(0, SIGTERM); /* Kill all processes for this process group */
     exit(0);    
   }
 
