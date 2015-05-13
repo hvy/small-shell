@@ -16,7 +16,7 @@
 #include "errhandler.h"
 
 /* Background proess termination detection using signal handlers(1), or polling(0) */
-#define SIGDET                ( 1 )
+#define SIGDET                ( 0 )
 #define MAX_INPUT_CHARS       ( 100 )
 #define MAX_DIRECTORY_CHARS   ( 300 )
 
@@ -59,9 +59,9 @@ int main(int argc, char *argv[], char *envp[]) {
 
 void printFinBgProcs() {
   int i = 1;
-  struct processNode *toFree;
 
   #if SIGDET
+    struct processNode *toFree;
     struct processNode *pn = finishedProcesses;
     while (pn != NULL) {
       printf("[%d] %d\n", i++, pn -> pid);
