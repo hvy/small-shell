@@ -16,7 +16,7 @@
 #include "errhandler.h"
 
 /* Background proess termination detection using signal handlers(1), or polling(0) */
-#define SIGDET                ( 0 )
+#define SIGDET                ( 1 )
 #define MAX_INPUT_CHARS       ( 100 )
 #define MAX_DIRECTORY_CHARS   ( 300 )
 
@@ -216,12 +216,14 @@ void handleOtherCmd(char *cmdArgv[], int foreground) {
     if (foreground) {
       gettimeofday(&tv_start, NULL);
       w = waitpid(pid, NULL, 0);
-      sigrelse(SIGCHLD);
       /*removeFinishedProcesses();*/
 	    gettimeofday(&tv_finish, NULL);
       running_time = tv_finish.tv_sec - tv_start.tv_sec;
       printf("Foreground process running time: %lds\n", running_time);
       printf("Wait ret: %d\n", w);
 		}
+
+    sigrelse(SIGCHLD);
+
   }
 }

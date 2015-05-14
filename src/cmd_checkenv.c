@@ -33,7 +33,7 @@ void handleCheckEnvCmd(const int cmdArgc, char *cmdArgv[]) {
 	 * pipefd[3] write end of snd pipe, written by sort/grep */
 	int e, status, pipefdc = 4, pipefdv[4];
 	char *pager;
-	pid_t childpid;
+	pid_t retpid, fstpid, sndpid, trdpid;
 
   /* Pager is set to NULL if PAGER isn't found. 
      If so, try less, else use pager */
@@ -44,29 +44,30 @@ void handleCheckEnvCmd(const int cmdArgc, char *cmdArgv[]) {
   if(-1 == e) fatal("Failed to create the fst pipe in checkEnv");
   e = pipe(pipefdv + 2);
   if(-1 == e) fatal("Failed to create the snd pipe in checkEnv");
+  
+  sighold(SIGCHLD);
 	
 	/* printenv  */
-	childpid = fork();
-  if(0 > childpid) fatal("Failed to fork by calling fork()");
-	else if(0 == childpid) {
+	fstpid = fork();
+  if(0 > fstpid) fatal("Failed to fork by calling fork()");
+	else if(0 == fstpid) {
+    sigrelse(SIGCHLD);
     dup2AndHandleErr(pipefdv[1], STDOUT_FILENO);      
 		closeFd(pipefdc, pipefdv);
-
 		cmdArgv[0] = "printenv";
 		cmdArgv[1] = NULL;
     execvp(cmdArgv[0], cmdArgv);
-
     fatal("Failed to execute printenv"); 
   }
 
 	/* sort/grep */
-	childpid = fork();
-	if(0 > childpid) fatal("Failed to fork by calling fork()");
-	else if(0 == childpid) {
+	sndpid = fork();
+	if(0 > sndpid) fatal("Failed to fork by calling fork()");
+	else if(0 == sndpid) {
+    sigrelse(SIGCHLD);
     dup2AndHandleErr(pipefdv[0], STDIN_FILENO);  
 		dup2AndHandleErr(pipefdv[3], STDOUT_FILENO);
     closeFd(pipefdc, pipefdv);
-
 		if(2 == cmdArgc) {
 			cmdArgv[0] = "sort";
       cmdArgv[1] = NULL;
@@ -75,18 +76,17 @@ void handleCheckEnvCmd(const int cmdArgc, char *cmdArgv[]) {
       cmdArgv[0] = "grep";
       execvp(cmdArgv[0], cmdArgv);
     }
-    
     fatal("Failed to execute sort/grep"); 
   }
 	
 	/* pager */
-	childpid = fork();
-	if(0 > childpid) {
+	trdpid = fork();
+	if(0 > trdpid) {
 		fatal("Failed to fork by calling fork()");
-	} else if(0 == childpid) {
+	} else if(0 == trdpid) {
+    sigrelse(SIGCHLD);
     dup2AndHandleErr(pipefdv[2], STDIN_FILENO);  
 		closeFd(pipefdc, pipefdv);
-
 		if(NULL != pager) {
 			/* Try pager since it was found */
 			cmdArgv[0] = "pager";
@@ -97,22 +97,27 @@ void handleCheckEnvCmd(const int cmdArgc, char *cmdArgv[]) {
       cmdArgv[0] = "less";
 	   	cmdArgv[1] = NULL;
 			execvp(cmdArgv[0], cmdArgv);
-		
 			/* Try more since less failed */
 			cmdArgv[0] = "more";
 	   	cmdArgv[1] = NULL;
 			execvp(cmdArgv[0], cmdArgv);
 		}
-
     fatal("Failed to execute pager"); 
   }
 	
 	closeFd(pipefdc, pipefdv);
 
-	/* TODO Handle errors */
-	#if !SIGNALDETECTION
-		wait(&status);
-		wait(&status);
-		wait(&status);
-	#endif
+  retpid = waitpid(fstpid, &status, 0);
+  if(-1 == retpid) fatal("Failed to wait in checkEnv");
+  checkStatus(status); 
+
+  retpid = waitpid(sndpid, &status, 0);
+  if(-1 == retpid) fatal("Failed to wait in checkEnv");
+  checkStatus(status);
+    
+  retpid = waitpid(trdpid, &status, 0);
+  if(-1 == retpid) fatal("Failed to wait in checkEnv");
+  checkStatus(status);
+
+  sigrelse(SIGCHLD);
 }
