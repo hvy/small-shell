@@ -29,6 +29,7 @@ struct processNode *finishedProcesses = NULL;
 struct processNode *lastFinishedProcess = NULL;
 
 char *input;
+char *WAIT_FG = 0;
 
 void sigchldHandler(int sig);
 void sigintHandler(int sigNum);
@@ -41,7 +42,7 @@ void handleOtherCmd(char *cmdArgv[], int foreground);
 pid_t pollProcess();
 
 int main(int argc, char *argv[], char *envp[]) {
-  
+ 
   input = (char*) malloc(sizeof(char) * MAX_INPUT_CHARS);
 
   registerSignalHandlers();
@@ -91,19 +92,11 @@ pid_t pollProcess() {
   return polledpid;
 }
 
-void sigintHandler(int sigNum) {
-  signal(SIGINT, sigintHandler);
-  fflush(stdout);
-}
-
-void sigchldHandler(int sig) {
+void removeFinishedProcesses() {
   pid_t pid;
   int status;
   struct processNode *newNode;
-     
-  signal(SIGCHLD, sigchldHandler);
   
-  sighold(SIGCHLD);
   while ((pid = waitpid((pid_t) (-1), &status, WNOHANG | WUNTRACED)) > 0) {
     if (WIFEXITED(status)) {
       /* Add to list of finished processes */
@@ -121,7 +114,16 @@ void sigchldHandler(int sig) {
       }
     }
   }
-  sigrelse(SIGCHLD);
+}
+
+void sigintHandler(int sigNum) {
+  signal(SIGINT, sigintHandler);
+  fflush(stdout);
+}
+
+void sigchldHandler(int sig) {
+  signal(SIGCHLD, sigchldHandler);
+  removeFinishedProcesses();
 }
 
 void registerSignalHandlers() {
@@ -187,11 +189,13 @@ void handleOtherCmd(char *cmdArgv[], int foreground) {
   struct timeval tv_start, tv_finish;
   long running_time; /* foreground process running time in sec */
 
+  sighold(SIGCHLD);
   pid = fork();
    
   if (pid < 0) 
 		fatal("Failed to fork parent process");
   else if (0 == pid ) {
+    sigrelse(SIGCHLD);
     /* Process is a child process */
     execvp(cmdArgv[0], cmdArgv);
     switch (errno) {
@@ -206,12 +210,13 @@ void handleOtherCmd(char *cmdArgv[], int foreground) {
     /* Process is a parent process */
     if (foreground) {
       gettimeofday(&tv_start, NULL);
-			/* TODO Handle error properly */
       w = waitpid(pid, NULL, 0);
+      sigrelse(SIGCHLD);
+      removeFinishedProcesses();
 	    gettimeofday(&tv_finish, NULL);
       running_time = tv_finish.tv_sec - tv_start.tv_sec;
       printf("Foreground process running time: %lds\n", running_time);
-      printf("Wait ret: %d,\n", w);
+      printf("Wait ret: %d\n", w);
 		}
   }
 }
