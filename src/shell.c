@@ -16,7 +16,7 @@
 #include "errhandler.h"
 
 /* Background proess termination detection using signal handlers(1), or polling(0) */
-#define SIGDET                ( 0 )
+#define SIGDET                ( 1 )
 #define MAX_INPUT_CHARS       ( 100 )
 #define MAX_DIRECTORY_CHARS   ( 300 )
 
@@ -27,6 +27,8 @@ struct processNode {
 };
 struct processNode *finishedProcesses = NULL;
 struct processNode *lastFinishedProcess = NULL;
+
+char *input;
 
 void sigchldHandler(int sig);
 void sigintHandler(int sigNum);
@@ -40,7 +42,7 @@ pid_t pollProcess();
 
 int main(int argc, char *argv[], char *envp[]) {
   
-  char *input = (char*) malloc(sizeof(char) * MAX_INPUT_CHARS);
+  input = (char*) malloc(sizeof(char) * MAX_INPUT_CHARS);
 
   registerSignalHandlers();
     
@@ -165,6 +167,7 @@ void handleCmd(char *cmd) {
   /* Handle exit command */
   if(strcmp(cmd, "exit\n") == 0) {
     kill(0, SIGTERM); /* Kill all processes for this process group */
+    free(input);
     exit(0);    
   }
 
