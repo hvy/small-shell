@@ -8,7 +8,7 @@
 void handleCdCmd(const int cmdArgc, char *cmdArgv[]) { 
   int e;
 
-  if(2 == cmdArgc /* handle root dir with 0 args to cd */)
+  if(2 == cmdArgc /* handle root dir with 0 args to cd */ || 0 == strcmp("~", cmdArgv[1]))
     e = chdir(getenv("HOME"));
   else /* other dirs */
     e = chdir(cmdArgv[1]);

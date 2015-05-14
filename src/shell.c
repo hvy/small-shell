@@ -16,7 +16,7 @@
 #include "errhandler.h"
 
 /* Background proess termination detection using signal handlers(1), or polling(0) */
-#define SIGDET                ( 1 )
+#define SIGDET                ( 0 )
 #define MAX_INPUT_CHARS       ( 100 )
 #define MAX_DIRECTORY_CHARS   ( 300 )
 
@@ -128,7 +128,6 @@ void sigintHandler(int sigNum) {
 
 void sigchldHandler(int sig) {
   signal(SIGCHLD, sigchldHandler);
-  printf("hej hej\n");
   removeFinishedProcesses();
 }
 
