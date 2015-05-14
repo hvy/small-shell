@@ -66,6 +66,7 @@ void printFinBgProcs() {
   #if SIGDET
     struct processNode *toFree;
     struct processNode *pn = finishedProcesses;
+    sighold(SIGCHLD);
     while (pn != NULL) {
       printf("[%d] %d\n", i++, pn -> pid);
       toFree = pn;
@@ -77,10 +78,12 @@ void printFinBgProcs() {
 
   #else /* Use polling by using wait/waitpid */ 
     pid_t fin_pid;
+    sighold(SIGCHLD);
     while((fin_pid = pollProcess()) > 0) {
       printf("[%d] %d\n", i++, fin_pid);
     }
   #endif
+  sigrelse(SIGCHLD);
 }
 
 pid_t pollProcess() {
@@ -96,7 +99,8 @@ void removeFinishedProcesses() {
   pid_t pid;
   int status;
   struct processNode *newNode;
-  
+ 
+  sighold(SIGCHLD);
   while ((pid = waitpid((pid_t) (-1), &status, WNOHANG | WUNTRACED)) > 0) {
     if (WIFEXITED(status)) {
       /* Add to list of finished processes */
@@ -114,6 +118,7 @@ void removeFinishedProcesses() {
       }
     }
   }
+  sigrelse(SIGCHLD);
 }
 
 void sigintHandler(int sigNum) {
@@ -123,6 +128,7 @@ void sigintHandler(int sigNum) {
 
 void sigchldHandler(int sig) {
   signal(SIGCHLD, sigchldHandler);
+  printf("hej hej\n");
   removeFinishedProcesses();
 }
 
@@ -212,7 +218,7 @@ void handleOtherCmd(char *cmdArgv[], int foreground) {
       gettimeofday(&tv_start, NULL);
       w = waitpid(pid, NULL, 0);
       sigrelse(SIGCHLD);
-      removeFinishedProcesses();
+      /*removeFinishedProcesses();*/
 	    gettimeofday(&tv_finish, NULL);
       running_time = tv_finish.tv_sec - tv_start.tv_sec;
       printf("Foreground process running time: %lds\n", running_time);
