@@ -11,22 +11,40 @@
 #include "cmd_checkenv.h"
 #include "errhandler.h"
 
-void closeFd(const int fdc, int *const fdv) {
-	int c, i;
-	for(i = 0; i < fdc; ++i) {
-		c = close(fdv[i]);	
-		if(-1 == c) fatal("Failed to close a file descriptor in closePipeFd()");
+/* Creates a pipe for the given pipe file descriptor and takes care of the
+  error handling */
+void tryToPipe(int* fdv) {
+  if(-1 == pipe(fdv)) {
+    fatal("[ERROR] Failed to create a pipe in checkEnv");
+  }
+}
+
+/* Closes the given file descriptor and takes care of the error handling */
+void tryToClose(int fd) {
+  if(-1 == close(fd)) {
+    fatal("[ERROR] Failed to close a file descriptor");
 	}
 }
 
-void dup2AndHandleErr(int oldfd, int newfd) {
-	int d;
-	d = dup2(oldfd, newfd);      
-	if(-1 == d) fatal("Failed to copy file descriptor using dup2(2) in dup2AndClose()");
+/* Copies oldfd file descriptor to newfd and takes care of the error handling */
+void tryToDup2(int oldfd, int newfd) {
+  if(-1 == dup2(oldfd, newfd)) {
+    fatal("[ERROR] Failed to copy a file descriptor using dup2()");
+  }
+}
+
+/* Waits for the given pid (blocking) and takes care of the error handling */
+void tryToWait(pid_t pid) {
+  int status;
+  if(-1 == waitpid(pid, &status, 0)) {
+      fatal("[ERROR] Failed to wait in checkEnv");
+  }
+  checkStatus(status);
 }
 
 void handleCheckEnvCmd(const int cmdArgc, char *cmdArgv[]) {
-	int e, c, status, fstPipeFd[2], sndPipeFd[2], trdPipeFd[3];
+
+	int fstPipeFd[2], sndPipeFd[2], trdPipeFd[3];
 	char *pager;
 	pid_t pid;
   
@@ -37,71 +55,45 @@ void handleCheckEnvCmd(const int cmdArgc, char *cmdArgv[]) {
 	pager = getenv("PAGER");
 	
   /* printenv  */
-  e = pipe(fstPipeFd);
-  if(-1 == e) {
-    fatal("Failed to create the fst pipe in checkEnv");
-  }
+  tryToPipe(fstPipeFd);
 
 	pid = fork();
 
   if(0 > pid) {
-    fatal("Failed to fork by calling fork()");
+    fatal("[ERROR] Failed to fork by calling fork()");
 	} else if(0 == pid  /* Child process */) {
    	
-    /* Close the read end of the snd pipe */
-    c = close(fstPipeFd[0]);	
-		if(-1 == c) {
-      fatal("Failed to close fst pipe read");
-	  }
-
-    /* Duplicate the write end of the pipe to stdout */
-    dup2AndHandleErr(fstPipeFd[1], STDOUT_FILENO);      
+    tryToDup2(fstPipeFd[1], STDOUT_FILENO);      
+    tryToClose(fstPipeFd[0]);
+    tryToClose(fstPipeFd[1]);
 		
     /* Run printenv */
     cmdArgv[0] = "printenv";
 		cmdArgv[1] = NULL;
     execvp(cmdArgv[0], cmdArgv);
    
-    fatal("Failed to execute printenv"); 
+    fatal("[ERROR] Failed to execute printenv"); 
+
   } else /* Parent process */ {
-   	
-    /* Close the write end of the fst pipe */
-    c = close(fstPipeFd[1]);	
-		if(-1 == c) {
-      fatal("Failed to close a file descriptor in printenv");
-	  }
     
-    pid = waitpid(pid, &status, 0);
-    
-    if(-1 == pid) {
-      fatal("Failed to wait in checkEnv");
-    }
-    checkStatus(status);
+    tryToClose(fstPipeFd[1]);
+    tryToWait(pid);
   }
 
   /* grep */
-	e = pipe(sndPipeFd);
-  if(-1 == e) {
-    fatal("Failed to crete the snd pipe in checkEnv");
-  }
+	tryToPipe(sndPipeFd);
 
   pid = fork();
 	
   if(0 > pid) {
-    fatal("Failed to fork by calling fork()");
+    fatal("[ERROR] Failed to fork by calling fork()");
 	} else if(0 == pid /* Child process */ ) {
     
-    /* Close the read end of the snd pipe */
-    c = close(sndPipeFd[0]);
-    if(-1 == c) {
-      fatal("Failed to close a file descriptor in grep");
-    }
+    tryToDup2(fstPipeFd[0], STDIN_FILENO);  
+		tryToDup2(sndPipeFd[1], STDOUT_FILENO);
+    tryToClose(sndPipeFd[0]);
+    tryToClose(sndPipeFd[1]); 
 
-    /* Duplicate the read end of the fst pipe to stdin */
-    dup2AndHandleErr(fstPipeFd[0], STDIN_FILENO);  
-    /* Duplicate the write end of snd pipe tp stdout */
-		dup2AndHandleErr(sndPipeFd[1], STDOUT_FILENO);
-      
     /* Run grep */  
     cmdArgv[0] = "grep";
 
@@ -112,92 +104,54 @@ void handleCheckEnvCmd(const int cmdArgc, char *cmdArgv[]) {
 
     execvp(cmdArgv[0], cmdArgv);
    
-    fatal("Failed to execute grep"); 
+    fatal("[ERROR] Failed to execute grep");
+     
   } else /* Parent process */ {
-    
-    /* Close the read end of the fst pipe */
-    c = close(fstPipeFd[0]);	
-		if(-1 == c) {
-      fatal("Failed to close a file descriptor in grep");
-	  }
-  	
-    /* Close the write end of the snd pipe */
-    c = close(sndPipeFd[1]);	
-		if(-1 == c) {
-      fatal("Failed to close a file descriptor in grep");
-	  }
-    
-    pid = waitpid(pid, &status, 0);
 
-    if(-1 == pid) {
-      fatal("Failed to wait in checkEnv");
-    }
-  
-    checkStatus(status);
+    tryToClose(fstPipeFd[0]);
+    tryToClose(sndPipeFd[1]);	
+    tryToWait(pid);
   }
   
 	/* sort */
-	e = pipe(trdPipeFd);
-  if(-1 == e) {
-    fatal("Failed to crete the trd pipe in checkEnv");
-  }
+	tryToPipe(trdPipeFd);
 	
   pid = fork();
   
   if(0 > pid) {
-     fatal("Failed to fork by calling fork()");
+     fatal("[ERROR] Failed to fork by calling fork()");
 	} else if(0 == pid /* Child process */) {
 
-    /* Close the read end of the trd pipe */
-    c = close(trdPipeFd[0]);
-    if(-1 == c) {
-      fatal("Failed to close a file descriptor in sort");
-    }
+    tryToDup2(sndPipeFd[0], STDIN_FILENO); 
+  	tryToDup2(trdPipeFd[1], STDOUT_FILENO);
+    tryToClose(trdPipeFd[0]);
+    tryToClose(trdPipeFd[1]);    	
     
-    /* Duplicate the read end of the snd pipe to stdin */
-    dup2AndHandleErr(sndPipeFd[0], STDIN_FILENO); 
-	  /* Duplicate the write end of the trd pipe to stdout */
-  	dup2AndHandleErr(trdPipeFd[1], STDOUT_FILENO);
-	
     /* Run sort */	
     cmdArgv[0] = "sort";
     cmdArgv[1] = NULL;
   
     execvp(cmdArgv[0], cmdArgv);
   
-    fatal("Failed to execute sort/grep"); 
+    fatal("[ERROR] Failed to execute sort/grep"); 
+  
   } else /* Parent process */ {
     
-    /* Close the read end of the snd pipe */
-    c = close(sndPipeFd[0]);	
-		if(-1 == c) {
-      fatal("Failed to close a file descriptor in grep");
-	  }
-  	
-    /* Close the write end of the trd pipe */
-    c = close(trdPipeFd[1]);	
-		if(-1 == c) {
-      fatal("Failed to close a file descriptor in grep");
-	  }
-    
-    pid = waitpid(pid, &status, 0);
-
-    if(-1 == pid) {
-      fatal("Failed to wait in checkEnv");
-    }
-    checkStatus(status);
+    tryToClose(sndPipeFd[0]);	
+    tryToClose(trdPipeFd[1]);	
+    tryToWait(pid);
   }
 	
 	/* pager */
 	pid = fork();
 	
   if(0 > pid) {
-		fatal("Failed to fork by calling fork()");
+		fatal("[ERROR] Failed to fork by calling fork()");
 	} else if(0 == pid /* Child process */) {
     
-    /* Duplicate the read end of the trd pipe to stdin */ 
-    dup2AndHandleErr(trdPipeFd[0], STDIN_FILENO);  
-	
+    tryToDup2(trdPipeFd[0], STDIN_FILENO);  
+	  tryToClose(trdPipeFd[0]);
+    
     /* Run pager */	
     if(NULL != pager) {
 			/* Try pager since it was found */
@@ -209,27 +163,22 @@ void handleCheckEnvCmd(const int cmdArgc, char *cmdArgv[]) {
       cmdArgv[0] = "less";
 	   	cmdArgv[1] = NULL;
 			execvp(cmdArgv[0], cmdArgv);
+      
       /* Try more since less failed */
 			cmdArgv[0] = "more";
 	   	cmdArgv[1] = NULL;
 			execvp(cmdArgv[0], cmdArgv);
 		}
 
-    fatal("Failed to execute pager"); 
+    fatal("[ERROR] Failed to execute pager"); 
+  
   } else /* Parent process */ {
     
-    /* Close the read end of the trd pipe */
-    c = close(trdPipeFd[0]);
-    if(-1 == c) {
-      fatal("Failed to close a file descriptor in pager");
-    }
-    
-    pid = waitpid(pid, &status, 0);
-    if(-1 == pid) {
-      fatal("Failed to wait in checkEnv");
-    }
-    checkStatus(status);
+    tryToClose(trdPipeFd[0]);
+    tryToWait(pid);
   }
   
   sigrelse(SIGCHLD);
 }
+
+

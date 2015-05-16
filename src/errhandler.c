@@ -10,17 +10,17 @@ void fatal(char *msg) {
 
 void checkStatus(int status) {
 
-  int child_status;
+  int ret;
 
   if(WIFEXITED(status)) {
-    child_status = WEXITSTATUS(status);
-    if(0 != child_status) {
-      fprintf(stderr, "Child exited with exit status: %d\n", child_status);
+    ret = WEXITSTATUS(status);
+    if(0 != ret) {
+      fprintf(stderr, "[INFO] Child exited with exit code: %d\n", ret);
     }
   } else {
     if(WIFSIGNALED(status)) {
-      /*child_ret = WTERMSIG(status);*/
-      fatal("Child process was terminated by a signal ");
+      ret = WTERMSIG(status);
+      fprintf(stderr, "[INFO] Child process was terminated by signal: %d\n", ret);
     }
   }
 }

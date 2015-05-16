@@ -6,6 +6,7 @@
 #include "cmd_cd.h"
 
 void handleCdCmd(const int cmdArgc, char *cmdArgv[]) { 
+
   int e;
 
   if(2 == cmdArgc /* handle root dir with 0 args to cd */ || 0 == strcmp("~", cmdArgv[1]))
