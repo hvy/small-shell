@@ -10,11 +10,13 @@ void fatal(char *msg) {
 
 void checkStatus(int status) {
 
-  int child_ret;
+  int child_status;
 
   if(WIFEXITED(status)) {
-    child_ret = WEXITSTATUS(status);
-    if(0 != child_ret) fatal("Bad exit status from child process");
+    child_status = WEXITSTATUS(status);
+    if(0 != child_status) {
+      fprintf(stderr, "Child exited with exit status: %d\n", child_status);
+    }
   } else {
     if(WIFSIGNALED(status)) {
       /*child_ret = WTERMSIG(status);*/
