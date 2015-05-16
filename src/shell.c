@@ -173,8 +173,8 @@ void handleCmd(char *cmd) {
 
   /* Handle exit command */
   if(strcmp(cmd, "exit\n") == 0) {
-    kill(0, SIGTERM); /* Kill all processes for this process group */
     free(input);
+    kill(0, SIGTERM); /* Kill all processes for this process group */
     exit(0);    
   }
 
