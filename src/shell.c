@@ -16,7 +16,7 @@
 #include "errhandler.h"
 
 /* Background proess termination detection using signal handlers(1), or polling(0) */
-#define SIGDET                ( 0 )
+#define SIGDET                ( 1 )
 #define MAX_INPUT_CHARS       ( 80 )
 #define MAX_DIRECTORY_CHARS   ( 200 )
 
@@ -41,8 +41,13 @@ void handleCmd(char *cmd);
 void handleOtherCmd(char *cmdArgv[], int foreground);
 pid_t pollProcess();
 
+/* Used to catch SIGTERM and exit gracefully */
+void sigtermHandler() {
+  /* Nothing here */
+}
+
 int main(int argc, char *argv[], char *envp[]) {
- 
+
   input = (char*) malloc(sizeof(char) * MAX_INPUT_CHARS);
 
   registerSignalHandlers();
@@ -82,7 +87,7 @@ void printFinBgProcs() {
     finishedProcesses = NULL;
     lastFinishedProcess = NULL;
 
-  #else /* If using polloing, poll using wait/waitpid*/ 
+  #else /* If using polling, poll using wait/waitpid*/ 
     
     pid_t fin_pid;
     
@@ -99,13 +104,19 @@ void printFinBgProcs() {
 
 pid_t pollProcess() {
   int status;	
+  pid_t ret_pid;
 	pid_t polledpid;
 
 	polledpid = waitpid((pid_t) -1, &status, WNOHANG);
-  if (polledpid == -1) fatal("error in pollProcess wait");
-  checkStatus(status);
-  if (WIFEXITED(status)) return polledpid;
-  else return -1;
+  if (polledpid == -1) {
+    if (errno == ECHILD) ret_pid = -1;
+    else fatal("error in pollProcess");
+  }
+  
+  if (WIFEXITED(status)) ret_pid = polledpid;
+  else ret_pid = -1;
+
+  return ret_pid;
 }
 
 void removeFinishedProcesses() {
@@ -117,7 +128,6 @@ void removeFinishedProcesses() {
   sighold(SIGCHLD);
   
   while ((pid = waitpid((pid_t) (-1), &status, WNOHANG | WUNTRACED)) > 0) {
-    checkStatus(status);
     if (WIFEXITED(status)) {
   
       /* Add to list of finished processes */
@@ -150,6 +160,7 @@ void sigchldHandler(int sig) {
 }
 
 void registerSignalHandlers() {
+  signal(SIGTERM, sigtermHandler);
   signal(SIGINT, sigintHandler);
   
 	#if SIGDET /* Register SIGCHLD if using signal detection */
@@ -270,9 +281,10 @@ void handleOtherCmd(char *cmdArgv[], int foreground) {
       /* Block the shell since the process is to be run in the foreground */
       pid = waitpid(pid, &status, 0);
       if(-1 == pid) {
-        fatal("Failed during waitpid for the foreground process");
+        /* For exception of ctrl-c interrupt */
+        if (errno != EINTR )
+          fatal("Failed during waitpid for the foreground process");
       }
-      checkStatus(status);
 
       /* Stop measuring the running time of the foreground process and print it */
 	    gettimeofday(&tv_finish, NULL);
