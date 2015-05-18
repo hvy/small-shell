@@ -16,7 +16,7 @@
 #include "errhandler.h"
 
 /* Background proess termination detection using signal handlers(1), or polling(0) */
-#define SIGDET                ( 1 )
+#define SIGDET                ( 0 )
 #define MAX_INPUT_CHARS       ( 80 )
 #define MAX_DIRECTORY_CHARS   ( 200 )
 
@@ -98,12 +98,14 @@ void printFinBgProcs() {
 }
 
 pid_t pollProcess() {
-	
+  int status;	
 	pid_t polledpid;
 
-	polledpid = waitpid((pid_t) -1, NULL, WNOHANG);
-  
-  return polledpid;
+	polledpid = waitpid((pid_t) -1, &status, WNOHANG);
+  if (polledpid == -1) fatal("error in pollProcess wait");
+  checkStatus(status);
+  if (WIFEXITED(status)) return polledpid;
+  else return -1;
 }
 
 void removeFinishedProcesses() {
@@ -115,6 +117,7 @@ void removeFinishedProcesses() {
   sighold(SIGCHLD);
   
   while ((pid = waitpid((pid_t) (-1), &status, WNOHANG | WUNTRACED)) > 0) {
+    checkStatus(status);
     if (WIFEXITED(status)) {
   
       /* Add to list of finished processes */

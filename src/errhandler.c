@@ -1,5 +1,7 @@
+#define _XOPEN_SOURCE 500 /* needed to use sighold/sigrlse */
 #include <stdio.h>
 #include <stdlib.h>
+#include <signal.h>
 
 #include "errhandler.h"
 

@@ -1,3 +1,4 @@
+#define _XOPEN_SOURCE 500 /* needed to use sighold/sigrlse */
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <errno.h>
